@@ -50,6 +50,7 @@ class App(Tk):
         self.running = False
         self.working = False
         self.title("ACLR - Mouse Camera")
+        self.iconbitmap("icon.ico")
         self.vars = {
             "H_SENSITIVITY"   : H_SENSITIVITY,
             "V_SENSITIVITY"   : V_SENSITIVITY,
