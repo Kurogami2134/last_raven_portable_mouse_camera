@@ -6,10 +6,14 @@ import win32api
 from win32gui import GetWindowText, GetForegroundWindow
 from tkinter import *
 from tkinter.ttk import *
+from enum import Enum
 
 
-CAMERA_YAW      = 0x08C316E4
-CAMERA_PITCH    = 0x08C336B0
+class Games(Enum):
+    AC3P = { 'YAW': 0x08C72F34, 'PITCH': 0x08C72F00, 'ID': 'NPUH10023'}
+    ACLR = { 'YAW': 0x08C316E4, 'PITCH': 0x08C336B0, 'ID': 'NPUH10024'}
+    ACSL = { 'YAW': 0x08C5DB84, 'PITCH': 0x08C5DB50, 'ID': 'NPUH10025'}
+    NONE = None
 
 H_SENSITIVITY   = 0.008
 V_SENSITIVITY   = 0.01
@@ -20,36 +24,54 @@ V_SMOOTH_FACTOR = 2
 
 
 class CameraInterface:
-    def __init__(self, psp_ram):
+    def __init__(self, psp_ram: PspRamIO, game: Games):
         self.ram = psp_ram
+        self.game: Games = game
     
     @property
     def yaw(self):
-        self.ram.seek(CAMERA_YAW)
+        self.ram.seek(self.game.value['YAW'])
         return unpack("f", self.ram.read(4))[0]
 
     @yaw.setter
     def yaw(self, yaw):
-        self.ram.seek(CAMERA_YAW)
+        self.ram.seek(self.game.value['YAW'])
         self.ram.write(pack("f", yaw))
     
     @property
     def pitch(self):
-        self.ram.seek(CAMERA_PITCH)
+        self.ram.seek(self.game.value['PITCH'])
         return unpack("f", self.ram.read(4))[0]
     
     @pitch.setter
     def pitch(self, pitch):
-        self.ram.seek(CAMERA_PITCH)
+        self.ram.seek(self.game.value['PITCH'])
         self.ram.write(pack("f", pitch))
+
+
+def check_game(ram: PspRamIO) -> Games:
+    ram.seek(0x08A4DD74)
+    if ram.read(9) == b'NPUH10023':
+        return Games.AC3P
+    
+    ram.seek(0x08AE9394)
+    if ram.read(9) == b'NPUH10024':
+        return Games.ACLR
+    
+    ram.seek(0x08A6D324)
+    if ram.read(9) == b'NPUH10025':
+        return Games.ACSL
+    
+    return Games.NONE
 
 
 class App(Tk):
     def __init__(self):
         super().__init__()
-        self.running = False
-        self.working = False
-        self.title("ACLR - Mouse Camera")
+        self.running: bool = False
+        self.working: bool = False
+        self.game: Games
+        self.title("PSP Armored Core - Mouse Camera")
         self.iconbitmap("icon.ico")
         self.vars = {
             "H_SENSITIVITY"   : H_SENSITIVITY,
@@ -137,7 +159,12 @@ class App(Tk):
         last_yaw = 0
 
         psp_ram = PspRamIO()  # hook to ppsspp memory
-        cam = CameraInterface(psp_ram)
+
+        self.game = check_game(psp_ram)
+        if self.game == Games.NONE:
+            exit()
+
+        cam = CameraInterface(psp_ram, self.game)
 
         while self.running:
             window_title = GetWindowText(GetForegroundWindow())
@@ -151,7 +178,8 @@ class App(Tk):
             if "PPSSPP" not in window_title:
                 sleep(1/60)
                 continue
-            if "NPUH10024" not in window_title:
+
+            if self.game.value['ID'] not in window_title:
                 sleep(1/60)
                 continue
             
